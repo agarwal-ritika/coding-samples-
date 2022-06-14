@@ -10,4 +10,4 @@ The short descriptions for each code sample are given below:
 
 **Poverty_EU SILC**: The objective of this code is to calculate poverty in UK, Denmark and Spain using the EU SILC dataset. The poverty rates are calculated according to both the US definition (absolute) and EU definition (relative). The code also produces some CrossTables to decompose what poverty can mean in terms of ability to meet expenses or other such variables.
 
-
+**Child Mortality_Cote d'Ivoire**: This project uses Child Mortality data from Cote d'Ivoire. The main objective of the code is to calculate mortality rates, stunting rates, correlations of stunting with poverty.
