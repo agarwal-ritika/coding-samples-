@@ -1,0 +1,506 @@
+---
+title: "Poverty_EU_SILC"
+author: "Ritika Agarwal"
+date: "14/06/2022"
+output: html_document
+---
+
+```{r, echo=FALSE}
+setwd("C://Users/Ritika Agarwal/Desktop/R/Homework 2-Measurement")
+
+list.of.packages <- c("tidyverse", "knitr","dbplyr","dplyr","ivpack","haven","broom","desc","lmtest","stargazer","tibble","ggplot2","psych","table1","base","gmodels","spatstat")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+df<-readRDS(file="Data HW 3/silc")
+dfpers<-readRDS(file="Data HW 3/silc_pers")
+
+summary(dfpers)
+
+missing <- dfpers %>% 
+  summarise_all(funs(mean(is.na(.))))
+  
+#we see that RX020: age at the end of the income reference period 
+#has 271 na values which is only .05% of the dataset. Thus, since it is better for 
+#our computation to take values from an age variable indicative of the end 
+#of the reference period, we choose this variable 
+
+hh_uk<-dfpers%>%
+  filter(hb020=="UK")%>%
+  select(hb020,hb030,rx020)
+
+dum1<-ifelse(hh_uk$rx020>65,1,0)
+dum3<-ifelse(hh_uk$rx020>=18,1,0)
+
+hh_uk<-cbind(hh_uk,dum1,dum3)
+
+by_hb030<-group_by(hh_uk,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum3),old=sum(dum1),members=n())%>%
+  ungroup()
+by_hb030$child<-by_hb030$members-by_hb030$adults
+
+by_hb030  #final dataset UK 
+summary(by_hb030)
+#there are no NA's in this dataset 
+
+#now we have a dataset for UK, which tells us the household ID, number of people above 65 and number of people, above 18 
+#adults= 18 above 0r 18
+#old= 65 above 
+#child= 18 below 
+#members= total members 
+
+#creating the same for ES and DK 
+
+hh_es<-dfpers%>%
+  filter(hb020=="ES")%>%
+  select(hb020,hb030,rx020)
+
+dum2<-ifelse(hh_es$rx020>65,1,0)
+dum4<-ifelse(hh_es$rx020>=18,1,0)
+
+hh_es<-cbind(hh_es,dum2,dum4)
+
+by_hb030_es<-group_by(hh_es,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum4),old=sum(dum2),members=n())%>%
+  ungroup()
+by_hb030_es$child<-by_hb030_es$members-by_hb030_es$adults
+
+by_hb030_es #final dataset ES 
+summary(by_hb030_es) #there are 56 NA values in Spain// 
+describe(by_hb030_es)
+
+by_hb030_es_c<-data.frame(na.omit(by_hb030_es))
+#removing NA values causes only 0.45% change in the dataset and thus, we can afford 
+#to lose these values, as they're not reported.
+#thus, we only have 12149 values now 
+
+#FOR DENMARK 
+hh_dk<-dfpers%>%
+  filter(hb020=="DK")%>%
+  select(hb020,hb030,rx020)
+
+dum5<-ifelse(hh_dk$rx020>65,1,0)
+dum6<-ifelse(hh_dk$rx020>=18,1,0)
+
+hh_dk<-cbind(hh_dk,dum5,dum6)
+
+by_hb030_dk<-group_by(hh_dk,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum6),old=sum(dum5),members=n())%>%
+  ungroup()
+
+by_hb030_dk$child<-by_hb030_dk$members-by_hb030_dk$adults
+
+by_hb030_dk
+summary(by_hb030_dk)
+#there are no NA values here too 
+#thus the three required datasets have been created 
+
+#now we have three datasets which tell us which households are UK, ES, DK 
+#for each dataset we have number of members/number of adults/number of children and number of oldies 
+
+a<-as.data.frame(unique(by_hb030$members))
+#we see that there are family sizes of maximum 12 in UK
+
+b<-as.data.frame(unique(by_hb030_es$members))
+#there are family sizes of 16 max in Spain 
+
+c<-as.data.frame(unique(by_hb030_dk$members))
+#there are family sizes of 8 max in Denmark
+
+e<-as.data.frame(unique(by_hb030$child))
+e #we see we have, 0,1,2,3,4,5,6,8 and 10 children HH in UK 
+
+f<-as.data.frame(unique(by_hb030_es$child))
+f #we see we have 0,1,2,3,4,5,6,7,8,9 children HH in ES, one NA
+
+g<-as.data.frame(unique(by_hb030_dk$child))
+g #we see we have 0,1,2,3,4,5, children HH in DK
+
+p<-unique(by_hb030$old) #max 3 adults are old in each HH but that doesn't matter. 
+p #age only matters for 1 person and 2 person HH
+#so only values 0,1,2 are worth looking at 
+
+q<-unique(by_hb030_es$old)
+q #0,1,2,3,4 out of which again, only 0,1,2 matters for age (under & above 65) #one na 
+
+r<-unique(by_hb030_dk$old)
+r #0,1,2 out of which all matter in Denmark
+
+hhdata<-rbind(by_hb030,by_hb030_dk,by_hb030_es_c)
+
+#creating thresholds based on US definition using PPP
+
+i<-mutate(hhdata, t= ifelse(members==1&old==1,9669,
+       ifelse(members==1&old==0,10488,
+              ifelse(members==2&old==2,12186,
+                     ifelse(members==2&old==1&child==1,13843,
+                            ifelse(members==2&old==0&child==0,13500,
+                                   ifelse(members==2&old==0&child==1,13896,
+                                          ifelse(members==2&old==1&child==0,12843,
+                                                 
+ifelse(members==3&child==0,15769,
+             ifelse(members==3&child==1,16227,
+                    ifelse(members==3&child==2,16242,
+                           ifelse(members==4&child==0,20794,
+                                  ifelse(members==4&child==1,21134,
+                                         ifelse(members==4&child==2,20444,
+                                                ifelse(members==4&child==3,20516,
+ifelse(members==5&child==0,25076,
+             ifelse(members==5&child==1,25441,
+                    ifelse(members==5&child==2,24662,
+                           ifelse(members==5&child==3,24059,
+                                  ifelse(members==5&child==4,23691,
+ifelse(members==6&child==0,28842,
+       ifelse(members==6&child==1,28957,
+              ifelse(members==6&child==2,28360,
+                     ifelse(members==6&child==3,27788,
+                            ifelse(members==6&child==4,26938,
+                                   ifelse(members==6&child==5,26434,
+                                    
+ifelse(members==7&child==0,33187,
+       ifelse(members==7&child==1,33394,
+              ifelse(members==7&child==2,32680,
+                     ifelse(members==7&child==3,32182,
+                            ifelse(members==7&child==4,31254,
+                                   ifelse(members==7&child==5,30172,
+                                          ifelse(members==7&child==6,28985,
+ifelse(members==8&child==0,37117,
+       ifelse(members==8&child==1,37444,
+              ifelse(members==8&child==2,36770,
+                     ifelse(members==8&child==3,36180,
+                            ifelse(members==8&child==4,35342,
+                                   ifelse(members==8&child==5,34278,
+                                          ifelse(members==8&child==6,33171,
+                                                 ifelse(members==8&child==7,32890,
+ifelse(members>=9&child==0,44649,
+ifelse(members>=9&child==2,44269,
+      ifelse(members>=9&child==3,43768,
+            ifelse(members>=9&child==4,42945,
+                  ifelse(members>=9&child==5,41813,
+                       ifelse(members>=9&child==6,40790,
+                            ifelse(members>=9&child==7,40536,
+                                ifelse(members>=9&child>=8,38975,0)))))))))))))))))))))))))))))))))))))))))))))))))
+inspect<-i%>%
+  filter(t==0)
+
+k<-data.frame(unique(i$t))
+
+#thus now we have a dataset i where we have information about 
+#each household, number of members old, adults and children
+#and their thresholds according to the US poverty lines. 
+
+#now we need to calculate the poverty thresholds for each country//
+new_data<-i%>%
+  mutate(pov_line= ifelse(hb020=="UK",t*0.697,
+                                  ifelse(hb020=="ES",t*0.737,
+                                         ifelse(hb020=="DK",t*8.295,0))))
+inspect_new_data<-new_data%>%
+  filter(pov_line==0,t==0)
+#thus we see that all poverty lines have been calculated 
+
+
+
+pov_line_uk<-new_data%>%
+  filter(hb020=="UK")%>%
+  select(hb030,adults,old,child,members,pov_line)
+
+summary(pov_line_uk)
+
+
+sum_pov_line<-summarise(poverty_lines_uk,pov_line)
+
+group_by_pov<-group_by(new_data,pov_line)
+group_by_pov<-summarize(members,child,pov_line)
+pov<-new_data%>%
+  group_by(pov_line)%>%
+  summarise(pov_line)
+  
+
+dfnew<-subset(df, df$hb020=="UK" | df$hb020=="ES" | df$hb020=="DK")
+View(dfnew)
+summary(dfnew)
+
+#gross income question accn to US definition
+#checking variables to see whether we need to include them or not for gross income calculation
+describe(dfnew$hy030g)
+summary(dfnew$hy030g) #we see almost 70% of NA (imputed rent) 
+
+#checking all variables 
+summary(dfnew$hy100g)
+describe(dfnew$hy100g) 
+#this variable is for int payment on mortgage, again around 60% MV
+
+summary(dfnew$hy120g)
+describe(dfnew$hy120g) #this is for regular taxes on wealth #no NA values 
+
+summary(dfnew$hy130g)
+describe(dfnew$hy130g) #inter HH transfers; no NA 
+
+summary(dfnew$hy140g)
+describe(dfnew$hy140g)#only 56 NA values #tax paid on income and social security 
+
+summary(dfnew$hy090g)
+describe(dfnew$hy090g) #no NA, capital gains to be removed 
+
+summary(dfnew$hy070g)
+describe(dfnew$hy070g) #here NA takes value 99999, so need to correct and remove 
+
+dfnew$hy070g[dfnew$hy070g==99999]<-NA
+summary(dfnew$hy070g) #we see 4 NA values only, best to remove 
+
+summary(dfnew$hy025)
+describe(dfnew$hy025) #56 NA values but needed so its cool to remove, very small part of dataset 
+  
+df_us_inc<-dfnew%>%
+   group_by(hb020,hb030)%>%
+   mutate(gross_income_euro= hy025*(hy020 -sum(hy090g,hy070g, na.rm=T)
+                                   + sum(hy120g,hy130g,hy140g,na.rm=T)),
+         gross_income_local=(gross_income_euro*hx010))
+
+View(df_us_inc)
+view(new_data)
+
+#question d and e 
+
+df_uk_hh<- df_us_inc%>%
+  filter(hb020=="UK")%>%
+  select(hb030,gross_income_euro,gross_income_local,db090)
+
+df_uk_pers<-new_data%>%
+  filter(hb020=="UK")%>%
+  select(hb030,adults,old,members,child,pov_line)
+
+r<-merge(df_uk_pers,df_uk_hh,by="hb030") #dataset showing the hh threshold and income 
+r<-r%>%
+  mutate(poor= ifelse(gross_income_local<pov_line,1,0))
+
+w<-lm(poor~1, data=r, weights = db090)
+summary(w) 
+#we see that the percentage of HH poor in UK according to the US def is 15.62%
+
+df_es_hh<- df_us_inc%>%
+  filter(hb020=="ES")%>%
+  select(hb030,gross_income_euro,gross_income_local,db090)
+
+df_es_pers<-new_data%>%
+  filter(hb020=="ES")%>%
+  select(hb030,adults,old,members,child,pov_line)
+
+o<-merge(df_es_pers,df_es_hh,by="hb030") #dataset showing the hh threshold and income 
+o<-o%>%
+  mutate(poor= ifelse(gross_income_local<pov_line,1,0))
+
+z<-lm(poor~1, data=o, weights = db090)
+summary(z) 
+#the percentage of HH poor in Spain is higher than in Uk with 17.6% poorer 
+
+df_dk_hh<- df_us_inc%>%
+  filter(hb020=="DK")%>%
+  select(hb030,gross_income_euro,gross_income_local,db090)
+
+df_dk_pers<-new_data%>%
+  filter(hb020=="DK")%>%
+  select(hb030,adults,old,members,child,pov_line)
+
+b<-merge(df_dk_pers,df_dk_hh,by="hb030") #dataset showing the hh threshold and income 
+b<-b%>%
+  mutate(poor= ifelse(gross_income_local<pov_line,1,0))
+
+a<-lm(poor~1, data=b, weights = db090)
+summary(a) 
+#we see that the poverty rate for households in Denmark is pretty low, with the 
+#rate being only 4.5%
+
+r$ind_weights<-r$db090*r$members
+j<-lm(poor~1, data=r, weights=ind_weights)
+summary(j)
+#we see that the poverty rates for individuals are lower and is 13.36%
+
+o$ind_weights<-o$db090*o$members
+h<-lm(poor~1, data=o, weights=ind_weights)
+summary(h) 
+#we see that the poverty rates are lower and is 15.15%
+
+b$ind_weights<-b$db090*b$members
+u<-lm(poor~1, data=b, weights= ind_weights)
+summary(u)
+#around 3.30 and again lower 
+
+#part 2 
+
+
+#EU calculations 
+
+#UK 
+hh_uk_2<-dfpers%>%
+  filter(hb020=="UK")%>%
+  select(hb020,hb030,rx020)
+
+dum_1<-ifelse(hh_uk_2$rx020>=14,1,0)
+dum_2<-ifelse(hh_uk_2$rx020<14,1,0)
+
+hh_uk_2<-cbind(hh_uk_2,dum_1,dum_2)
+
+hh_uk_2<-group_by(hh_uk_2,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum_1),child=sum(dum_2),members=n())%>%
+  ungroup()
+
+hh_uk_2<-hh_uk_2%>%
+  mutate(eq_size= ifelse(members==1,1, 
+                         ifelse(members>1,1 + (adults-1)*0.5 + (child)*0.3,0 )))
+
+#ES
+hh_es_2<-dfpers%>%
+  filter(hb020=="ES")%>%
+  select(hb020,hb030,rx020)
+
+dum_3<-ifelse(hh_es_2$rx020>=14,1,0)
+dum_4<-ifelse(hh_es_2$rx020<14,1,0)
+
+hh_es_2<-cbind(hh_es_2,dum_3,dum_4)
+
+hh_es_2<-group_by(hh_es_2,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum_3),child=sum(dum_4),members=n())%>%
+  ungroup()
+
+hh_es_2<-hh_es_2%>%
+  mutate(eq_size= ifelse(members==1,1, 
+                         ifelse(members>1,1 + (adults-1)*0.5 + (child)*0.3,0 )))
+
+#DK
+
+hh_dk_2<-dfpers%>%
+  filter(hb020=="DK")%>%
+  select(hb020,hb030,rx020)
+
+dum_5<-ifelse(hh_dk_2$rx020>=14,1,0)
+dum_6<-ifelse(hh_dk_2$rx020<14,1,0)
+
+hh_dk_2<-cbind(hh_dk_2,dum_5,dum_6)
+
+hh_dk_2<-group_by(hh_dk_2,hb030,hb020)%>%
+  mutate(n=n())%>%
+  summarise(adults=sum(dum_5),child=sum(dum_6),members=n())%>%
+  ungroup()
+
+hh_dk_2<-hh_dk_2%>%
+  mutate(eq_size= ifelse(members==1,1, 
+                         ifelse(members>1,1 + (adults-1)*0.5 + (child)*0.3,0 )))
+
+#so we have three datasets which show the eq_hh for each country and each HH
+#now we need to use hy020 to find the eq_income for each HH
+
+hh_uk_inc<-dfnew%>%
+  filter(hb020=="UK")%>%
+  select(hb030,hy020,db090)
+summary(hh_uk_inc) #no NA 
+
+hh_uk_2<-merge(hh_uk_2,hh_uk_inc, by="hb030")
+
+hh_es_inc<-dfnew%>%
+  filter(hb020=="ES")%>%
+  select(hb030,hy020,db090)
+summary(hh_es_inc) #no NA
+
+hh_es_2<-merge(hh_es_2,hh_es_inc, by="hb030")
+
+hh_dk_inc<-dfnew%>%
+  filter(hb020=="DK")%>%
+  select(hb030,hy020,db090)
+summary(hh_dk_inc)
+
+hh_dk_2<-merge(hh_dk_2,hh_dk_inc, by="hb030")
+
+new_data_eu<-rbind(hh_uk_2,hh_es_2,hh_dk_2)
+new_data_eu<-new_data_eu%>%
+  mutate(eq_hh= hy020/eq_size)
+
+install.packages("spatstat")
+library(spatstat)
+
+median_inc_uk<-new_data_eu%>%
+  filter(hb020=="UK")%>%
+  mutate(median_inc_uk= 0.60*weighted.median(eq_hh,db090))%>%
+  mutate(poor_hh= ifelse(eq_hh<median_inc_uk, 1, 0))%>%
+  mutate(ind_weights= db090*members)
+
+pov_uk_eu_hh<-lm(poor_hh~1, data=median_inc_uk, weights= db090)
+summary(pov_uk_eu_hh) #we see that the poverty rate for HH is 18.85 
+
+median_inc_es<-new_data_eu%>%
+  filter(hb020=="ES")%>%
+  mutate(median_inc_es= 0.60*weighted.median(eq_hh,db090))%>%
+  mutate(poor_hh= ifelse(eq_hh<median_inc_es, 1, 0))%>%
+  mutate(ind_weights= db090*members)
+
+pov_es_eu_hh<-lm(poor_hh~1, data=median_inc_es, weights= db090)
+summary(pov_es_eu_hh) #we see that the pov rate for HH is 21.01
+
+median_inc_dk<-new_data_eu%>%
+  filter(hb020=="DK")%>%
+  mutate(median_inc_dk= 0.60*weighted.median(eq_hh,db090))%>%
+  mutate(poor_hh= ifelse(eq_hh<median_inc_dk, 1, 0))%>%
+  mutate(ind_weights= db090*members)
+
+pov_dk_eu_hh<-lm(poor_hh~1, data= median_inc_dk, weights= db090)
+summary(pov_dk_eu_hh)
+#we see that the pov rate for HH is 12.06 for Denmark 
+
+pov_uk_eu_ind<-lm(poor_hh~1, data=median_inc_uk, weights= ind_weights)
+summary(pov_uk_eu_ind) #17.74% of individuals are poor 
+
+pov_es_eu_ind<-lm(poor_hh~1, data=median_inc_es, weights= ind_weights)
+summary(pov_es_eu_ind) #19.99% 20% individuals are poor 
+
+pov_dk_eu_ind<-lm(poor_hh~1, data= median_inc_dk, weights= ind_weights)
+summary(pov_dk_eu_ind) #8.9% of individuals are poor 
+
+comp<- cbind(w$coefficients*100,z$coefficients*100,a$coefficients*100)
+comp1<- cbind(j$coefficients*100,h$coefficients*100,u$coefficients*100)
+comp_pov_us<-rbind(comp,comp1)
+rownames(comp_pov_us)<-c("Household Rate","Individual Rate")
+colnames(comp_pov_us)<-c("United Kingdom","Spain", "Denmark")
+
+kable(comp_pov_us, caption="Poverty Rates: US Definition")
+
+cmp<- cbind(pov_uk_eu_hh$coefficients*100,pov_es_eu_hh$coefficients*100,pov_dk_eu_hh$coefficients*100)
+cmp1<- cbind(pov_uk_eu_ind$coefficients*100,pov_es_eu_ind$coefficients*100,pov_dk_eu_ind$coefficients*100)
+comp_pov_eu<-rbind(cmp,cmp1)
+rownames(comp_pov_eu)<-c("Household Rate","Individual Rate")
+colnames(comp_pov_eu)<-c("United Kingdom","Spain", "Denmark")
+
+kable(comp_pov_eu, caption="Poverty Rates: EU Definition")
+
+dfnewuk<-dfnew%>%
+   filter(hb020=="UK")%>%
+   select(hb030,hs060)
+ 
+r<-merge(r,dfnewuk,by="hb030")
+
+dfnewes<-dfnew%>%
+   filter(hb020=="ES")%>%
+   select(hb030,hs060)
+ 
+o<-merge(o,dfnewes,by="hb030")
+summary(o$hs060)
+o<-na.omit(o)
+
+dfnewdk<-dfnew%>%
+  filter(hb020=="DK")%>%
+  select(hb030,hs060)
+
+b<-merge(b,dfnewdk,by="hb030")
+
+CrossTable(r$poor,r$hs060, digits=2,prop.chisq=F, prop.r=TRUE, prop.c=TRUE, prop.t=TRUE) #US
+
+CrossTable(median_inc_uk$poor, median_inc_uk$hs060, digits=2,prop.chisq=F, prop.r=TRUE, prop.c=TRUE, prop.t=TRUE ) #EU
+
+mutate(var = as.numeric(var))
+mutate(var = as.character(var))
+```
