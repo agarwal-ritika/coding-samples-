@@ -1,0 +1,497 @@
+---
+title: "PISA_Fr, Nor, Vietnam"
+author: "Ritika Agarwal"
+date: "14/06/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+list.of.packages <- c("tidyverse", "knitr","dbplyr","dplyr","ivpack","haven","broom","desc","lmtest","stargazer","tibble","ggplot2","psych","base","gmodels","spatstat", "xtable")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+df<-read_dta(file="panel97.dta")
+
+summary(df)
+
+df1<-df%>%
+  select(pupil_id, gscore_t1, gscore_t2, gscore_t3, fscore_t2, fscore_t3, mscore_t2, mscore_t3)
+
+df1<-na.omit(df1)
+(9641-6351)/9641
+
+summary(df1)
+
+#we see that by omitting the missing values we lose around 34% of our dataset. However, considering the graph comparisons don't really need the missing values and we aren't adding any information by keeping them at this stage, we can do it. 
+
+#comparing the gscores of different years in a plot
+
+plot1<- ggplot(df1, fill=white) +
+  ggtitle("Global Scores in Test 1, 2 & 3") +
+  geom_density(aes(x= gscore_t1, col='a')) +
+  geom_density(aes(x= gscore_t2, col='b')) +
+  geom_density(aes(x= gscore_t3, col='c')) +
+  scale_color_manual(name="", values= c('a'= "purple", 'b'= "forestgreen", 'c'= "red"), labels= c('Test 1', 'Test 2', 'Test 3')) +
+  ylab("Density") + xlab("Scores") +
+  theme(axis.line= element_line(colour="black"), panel.border= element_blank(), panel.background = element_blank())
+
+plot2<- ggplot(df1, fill=white) +
+  ggtitle("Test Scores in Math, Test 2 & 3") +
+  geom_density(aes(x= mscore_t2, col='a')) +
+  geom_density(aes(x= mscore_t3, col='b')) +
+  scale_color_manual(name="", values= c('a'= "indianred", 'b'= "blue"), labels= c('Test 2',  'Test 3')) +
+  ylab("Density") + xlab("Scores") +
+  theme(axis.line= element_line(colour="black"), panel.border= element_blank(), panel.background = element_blank())
+
+plot3<- ggplot(df1, fill=white) +
+  ggtitle("Test Scores in French, Test 2 & 3") +
+  geom_density(aes(x= fscore_t2, col='a')) +
+  geom_density(aes(x= fscore_t3, col='b')) +
+  scale_color_manual(name="", values= c('a'= "magenta", 'b'= "indianred"), labels= c('Test 2',  'Test 3')) +
+  ylab("Density") + xlab("Scores") +
+  theme(axis.line= element_line(colour="black"), panel.border= element_blank(), panel.background = element_blank())
+
+describe(df$gscore_t1)
+describe(df$gscore_t2)
+describe(df$gscore_t3)
+summary(df$gscore_t1)
+summary(df$mscore_t2)
+summary(df$fscore_t2)
+summary(df$mscore_t3)
+summary(df$fscore_t3)
+summary(df$gscore_t2)
+summary(df$gscore_t3)
+
+
+chk_na<-data.frame(colSums(is.na(df)))
+chk_na<-data.frame((colSums(is.na(df))/nrow(df))*100)
+
+xtable(chk_na)
+
+t1<-t.test(df$gscore_t1, df$gscore_t1[!is.na(df$gscore_t2)|!is.na(df$gscore_t3)])
+t2<-t.test(df$gscore_t1, df$gscore_t1[!is.na(df$gscore_t2) & !is.na(df$gscore_t3)])
+
+o<-tidy(t1)
+p<-tidy(t2)
+
+o$parameter<-NULL
+o$conf.low<-NULL
+o$alternative<-NULL
+o$method<-NULL
+o$conf.high<-NULL
+
+p$parameter<-NULL
+p$conf.low<-NULL
+p$alternative<-NULL
+p$method<-NULL
+p$conf.high<-NULL
+
+kable(o, caption="T-test: all students(t1) vs students(t1) & ans(t2/t3)")
+kable(p, caption="T-test: all students(t1) vs students(t1) & ans(t2&t3)")
+
+ggplot(df1, aes(x=gscore_t1, y=gscore_t2)) + 
+  geom_line( color="#69b3a2", size=2, alpha=0.9, linetype=2) +
+  geom_abline()+
+  xlab("Global Score Test 1") + ylab("Global Score Test 2") + 
+  ggtitle("Evolution of Scores: First 3 Years") +
+ theme(axis.line= element_line(colour="black"), panel.border= element_blank(), panel.background = element_blank())
+
+a<-summary(df1$gscore_t1)
+b<-summary(df1$gscore_t2)
+c<-summary(df1$gscore_t3)
+d<-summary(df1$zscore_t1)
+e<-summary(df1$zscore_t2)
+f<-summary(df1$zscore_t3)
+g<-summary(df1$diff_1)
+h<-summary(df1$diff_2)
+
+sum_stat<-as.data.frame(rbind(a,b,c,d,e,f,g,h))
+variables<-c("gscoret1", "gscoret2", "gscoret3", "zscoret1", "zscoret2", "zscoret3", "diff t12", "diff t23")
+y<-cbind(variables,sum_stat)
+kable(y, booktabs=TRUE, caption="Distribution of Statistics")
+
+df<-df%>%
+  mutate(d_gscore_t1= ifelse(is.na(d_gscore_t1), 11, d_gscore_t1))%>%
+  mutate(d_gscore_t2= ifelse(is.na(d_gscore_t2), 11, d_gscore_t2))%>%
+  mutate(d_gscore_t3= ifelse(is.na(d_gscore_t3), 11, d_gscore_t3))
+
+gscor12<-CrossTable(df$d_gscore_t1, df$d_gscore_t2, prop.r = T)
+gscor12<-as.data.frame.matrix(gscor12[["prop.row"]])
+gscor12<-gscor12*100
+
+gscor23<-CrossTable(df$d_gscore_t2, df$d_gscore_t3, prop.r=T)
+gscor23<-as.data.frame.matrix(gscor23[["prop.row"]])
+gscore23<-gscor23*100
+
+df_pass<-df%>%
+  filter(birthy==1991 & year_t1==1997 & year_t2==1999 & year_t3==2002)
+
+t.test(df_pass$gscore_t1[df_pass$birthm==1], df_pass$gscore_t1[df_pass$birthm==12])
+t.test(df_pass$gscore_t2[df_pass$birthm==1], df_pass$gscore_t2[df_pass$birthm==12])
+t.test(df_pass$gscore_t3[df_pass$birthm==1], df_pass$gscore_t3[df_pass$birthm==12])
+
+t.test(df$gscore_t1[df$birthm==1], df$gscore_t1[df$birthm==12])
+t.test(df$gscore_t2[df$birthm==1], df$gscore_t2[df$birthm==12])   
+t.test(df$gscore_t3[df$birthm==1], df$gscore_t3[df$birthm==12])
+
+Jan <- c(72.56,69.62,67.95)
+Dec <- c(65.22,63.58,63.21)
+Diff <- c(7.34,6.04,4.74)
+CI <- c("[6.12;8.58]","[4.07;7.77]","[2.29;6.42]")
+Pvalue<-c("2.2e-16", "3.989e-13","3.845e-07")
+Test<-c("Test 1", "Test 2", "Test 3")
+table2 <- rbind(Test,Jan,Dec,Diff,CI,Pvalue)
+
+row.names(table2)<-c("Test","Mean global scores: born in January","Mean global scores: born in December",
+                     "Differences in mean global scores", "Confidence interval at the 95% level of differences","P-value for T-test")
+
+kable(table2, caption="Global Test Scr: Children born in January and December")
+
+df_occ1<-df%>%
+  filter(parent_occ==3| parent_occ==6)
+
+t.test(df_occ1$gscore_t1[df_occ1$parent_occ==3], df_occ1$gscore_t1[df_occ1$parent_occ==6])
+
+t.test(df_occ1$gscore_t2[df_occ1$parent_occ==3], df_occ1$gscore_t2[df_occ1$parent_occ==6])
+
+t.test(df_occ1$gscore_t3[df_occ1$parent_occ==3], df_occ1$gscore_t3[df_occ1$parent_occ==6])
+Prof <- c(75.71,74.45,76.18)
+BC <- c(65.35,62.82,59.97)
+Dif2 <- c(10.36,11.63,16.21)
+CI2 <- c("[9.64;11.06]","[10.73,12.51]","[15.24;17.16]")
+Pvalue<-c("2.2e-16","2.2e-16","2.2e-16")
+Test<-c("Test 1", "Test 2", "Test 3")
+table3 <- rbind(Test,Prof, BC, Dif2, CI2,Pvalue)
+
+row.names(table3)<-c("Test","Mean global scores: children of Professionals","Mean global scores: children of Blue Collar","Differences in mean global scores", "Confidence interval at the 95% level of differences","P-value for T-test")
+kable(table3, caption="Global Test Scr: Children of Professionals vs Blue Collars")
+
+pisa12_<-read_dta(file="pisa_2012.dta")
+
+summary(pisa12_$PV1MATH)
+summary(pisa12_$PV2MATH)
+summary(pisa12_$PV3MATH)
+summary(pisa12_$PV4MATH)
+summary(pisa12_$PV5MATH)
+
+sum(is.na(pisa12_$PV1SCIE))
+
+summary(pisa12_$PV1MATH)
+check_na<-data.frame(colSums(is.na(pisa12_)))
+check_na<-data.frame((colSums(is.na(pisa12_))/nrow(pisa12_))*100)
+u<-as.data.frame(check_na[check_na>0])
+
+pisa_config <- list("variables","parameters")
+pisa_config$variables$weightFinal<-"WEIGHT"
+pisa_config$variables$weightBRR <-"W_FSTR"
+pisa_config$parameters$BRRreps <- as.numeric(80) # number of replication weights
+
+#>>> Functions >>>
+
+#>>> Mean estimation for plausible values
+
+fun.pv <- function (pvnames, data, folder = getwd()) {
+ 
+    R.mean <- sapply(pvnames, function(k) sapply(1:pisa_config$parameters$BRRreps, 
+                                                 function(i) weighted.mean(data[[k]], 
+                                                                           data[[paste0(pisa_config$variables$weightBRR,i)]], na.rm = TRUE)))
+    PV.mean <- sapply(pvnames, function(x) weighted.mean(data[[x]], 
+                                                         data[[pisa_config$variables$weightFinal]], na.rm = TRUE))
+    MEAN.m <- mean(PV.mean)
+    cc = 1/20
+    
+    var.mean.w <- mean(sapply(seq_along(pvnames), function(i) cc *sum((R.mean[, i] - PV.mean[i])^2)))
+    
+    var.mean.b <- (1/(length(pvnames) - 1)) * sum(sapply(seq_along(pvnames), function(i) (PV.mean[i] - MEAN.m)^2)) 
+    
+    mean.se <- (var.mean.w + (1 + 1/length(pvnames)) * var.mean.b)^(1/2)
+    
+    LB <- MEAN.m - 1.96*mean.se
+    UB <- MEAN.m + 1.96*mean.se
+    
+    result <- data.frame(Freq = length(data[[pisa_config$variables$weightFinal]]), 
+                         Mean = mean(MEAN.m), s.e. = mean.se, LB = LB, UB = UB)
+    
+    return(round(result, 2))
+}
+
+#>>> Mean estimation for standard variables
+
+fun <- function(variable, data) {
+  
+  meanrp <- sapply(1:pisa_config$parameters$BRRreps, function(i) weighted.mean(as.numeric(data[[variable]]), 
+                                                                               data[[paste(pisa_config$variables$weightBRR, i, sep = "")]], 
+                                                                               na.rm = TRUE))
+  meantot <- weighted.mean(as.numeric(data[[variable]]), 
+                           data[[pisa_config$variables$weightFinal]], na.rm = TRUE)
+  
+  meanse <- (0.05 * sum((meanrp - meantot)^2))^(1/2)
+  
+  LB <- meantot - 1.96*meanse
+  UB <- meantot + 1.96*meanse
+  
+  result <- data.frame(Freq = sum(!is.na(data[[variable]])), 
+                       Mean = meantot, s.e. = meanse, LB = LB, UB = UB)
+  return(round(result, 2))
+  
+}
+
+pv.math <- c("PV1MATH", "PV2MATH", "PV3MATH", "PV4MATH", "PV5MATH")
+pv.read <- c("PV1READ", "PV2READ", "PV3READ", "PV4READ", "PV5READ")
+pv.scien <- c("PV1SCIE", "PV2SCIE", "PV3SCIE", "PV4SCIE", "PV5SCIE")
+
+### Math
+
+Fin_m <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Finland", ] , folder= getwd())
+Fra_m <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="France", ] , folder= getwd())
+Nor_m <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Norway", ] , folder= getwd())
+Vie_m <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Viet Nam", ] , folder= getwd())
+
+#We can bind the scores together
+math_scr <- as.data.frame(rbind(Fin_m, Fra_m, Nor_m, Vie_m))
+
+## save the table
+library(xtable)
+#use the xtable command to create LaTeX code:
+xtable(math_scr)
+#copy the LaTex Code into the table generate ("file" -> "from LaTex Code")
+
+Fin_r<-fun.pv(pv.read, pisa12_[pisa12_$CNT=="Finland", ] , folder= getwd())
+Fra_r<-fun.pv(pv.read, pisa12_[pisa12_$CNT=="France", ] , folder= getwd())
+Nor_r<-fun.pv(pv.read, pisa12_[pisa12_$CNT=="Norway", ] , folder= getwd())
+Vie_r<-fun.pv(pv.read, pisa12_[pisa12_$CNT=="Viet Nam", ] , folder= getwd())
+
+read_scr <- rbind(Fin_r, Fra_r, Nor_r, Vie_r)
+
+xtable(read_scr)
+
+Fin_s <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Finland", ] , folder= getwd())
+Fra_s <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="France", ] , folder= getwd())
+Nor_s <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Norway", ] , folder= getwd())
+Vie_s <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Viet Nam", ] , folder= getwd())
+
+sci_scr <- rbind(Fin_s, Fra_s, Nor_s, Vie_s)
+
+##save the table
+xtable(sci_scr)
+
+#### (3.) Average Scores in Reading, Mathematics,
+####      and Science for Girls and Boys Separately
+
+# Just apply the function again, add the gender condition
+
+#### Males
+
+### Math
+
+Fin_mb <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==1, ] , folder= getwd())
+Fra_mb <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==1, ] , folder= getwd())
+Nor_mb <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==1, ] , folder= getwd())
+Vie_mb <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==1, ] , folder= getwd())
+
+#bind them together
+math_b <- rbind(Fin_mb, Fra_mb, Nor_mb, Vie_mb)
+
+
+### Reading
+
+Fin_rb <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==1, ] , folder= getwd())
+Fra_rb <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==1, ] , folder= getwd())
+Nor_rb <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==1, ] , folder= getwd())
+Vie_rb <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==1, ] , folder= getwd())
+
+#Bind them together
+read_b <- rbind(Fin_rb, Fra_rb, Nor_rb, Vie_rb)
+
+
+### Science
+
+Fin_sb <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==1, ] , folder= getwd())
+Fra_sb <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==1, ] , folder= getwd())
+Nor_sb <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==1, ] , folder= getwd())
+Vie_sb <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==1, ] , folder= getwd())
+
+#bind them together
+sci_b <- rbind(Fin_sb, Fra_sb, Nor_sb, Vie_sb)
+
+#### Female 
+
+### Math
+
+Fin_mg <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==0, ] , folder= getwd())
+Fra_mg <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==0, ] , folder= getwd())
+Nor_mg <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==0, ] , folder= getwd())
+Vie_mg <- fun.pv(pv.math, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==0, ] , folder= getwd())
+
+#bind them
+math_g <- rbind(Fin_mg, Fra_mg, Nor_mg, Vie_mg)
+
+
+### Reading
+
+Fin_rg <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==0, ] , folder= getwd())
+Fra_rg <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==0, ] , folder= getwd())
+Nor_rg <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==0, ] , folder= getwd())
+Vie_rg <- fun.pv(pv.read, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==0, ] , folder= getwd())
+
+#bind them
+read_g <- rbind(Fin_rg, Fra_rg, Nor_rg, Vie_rg)
+
+
+
+### Science
+
+Fin_sg <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Finland" & pisa12_$GENDER==0, ] , folder= getwd())
+Fra_sg <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="France" & pisa12_$GENDER==0, ] , folder= getwd())
+Nor_sg <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Norway" & pisa12_$GENDER==0, ] , folder= getwd())
+Vie_sg <- fun.pv(pv.scien, pisa12_[pisa12_$CNT=="Viet Nam" & pisa12_$GENDER==0, ] , folder= getwd())
+
+#bind them together
+sci_g<- rbind(Fin_sg, Fra_sg, Nor_sg, Vie_sg)
+
+
+
+### create a meaningful table
+
+# a good way to present things would be a table for each country containing scores
+# in each category of boys and girls in two seperate lines
+
+##Finland
+Finland <- rbind(Fin_mb, Fin_mg, Fin_rb, Fin_rg, Fin_sb, Fin_sg)
+
+
+xtable(Finland)
+
+##France
+
+France <- rbind(Fra_mb, Fra_mg, Fra_rb, Fra_rg, Fra_sb, Fra_sg)
+
+
+xtable(France)
+
+
+##Norway
+
+Norway <- rbind(Nor_mb, Nor_mg, Nor_rb, Nor_rg, Nor_sb, Nor_sg)
+
+
+xtable(Norway)
+
+
+##Vietnam
+
+Vietnam <- rbind(Vie_mb, Vie_mg, Vie_rb, Vie_rg, Vie_sb, Vie_sg)
+
+maths_difference <- rbind(Fin_mb, Fin_mg, Fra_mb, Fra_mg, Nor_mb, Nor_mg, Vie_mb, Vie_mg) 
+Gender <-c("Male", "Female", "Male", "Female", "Male", "Female", "Male", "Female")
+Country <- c("Finland", "Finland", "France", "France", "Norway", "Norway", "Vietnam", "Vietnam")
+maths_difference  <- cbind(maths_difference, Gender, Country)
+
+plotmath <- ggplot(maths_difference, aes(x=Country, y=Mean, colour=Gender)) +
+  geom_errorbar(aes(ymin=LB, ymax=UB), width=.2, position = position_dodge(width=0.2)) +
+  geom_line(position = position_dodge(width=0.2)) +
+  geom_point(size=2, shape=21, fill="white", position = position_dodge(width=0.2)) +
+  geom_text(aes(label=Mean),hjust=-0.1, vjust=-0.1) +
+  ggtitle("Average Scores by Gender and Country: Maths")
+
+plotmath
+
+reading_difference<- rbind(Fin_rb, Fin_rg, Fra_rb, Fra_rg, Nor_rb, Nor_rg, Vie_rb, Vie_rg)
+Gender <-c("Male", "Female", "Male", "Female", "Male", "Female", "Male", "Female")
+Country <- c("Finland", "Finland", "France", "France", "Norway", "Norway", "Vietnam", "Vietnam")
+reading_difference<- cbind(reading_difference, Gender, Country)
+
+plotreading <- ggplot(reading_difference, aes(x=Country, y=Mean, colour=Gender)) +
+  geom_errorbar(aes(ymin=LB, ymax=UB), width=.2, position = position_dodge(width=0.2)) +
+  geom_line(position = position_dodge(width=0.2)) +
+  geom_point(size=2, shape=21, fill="white", position = position_dodge(width=0.2)) +
+  geom_text(aes(label=Mean),hjust=-0.1, vjust=-0.1) +
+  ggtitle("Average Scores by Gender and Country: Reading")
+
+plotreading
+
+science_difference<- rbind(Fin_sb, Fin_sg, Fra_sb, Fra_sg, Nor_sb, Nor_sg, Vie_sb, Vie_sg)
+Gender <-c("Male", "Female", "Male", "Female", "Male", "Female", "Male", "Female")
+Country <- c("Finland", "Finland", "France", "France", "Norway", "Norway", "Vietnam", "Vietnam")
+science_difference<- cbind(science_difference, Gender, Country)
+
+plotscience<-ggplot(science_difference, aes(x=Country, y=Mean, colour=Gender)) +
+  geom_errorbar(aes(ymin=LB, ymax=UB), width=.2, position = position_dodge(width=0.2)) +
+  geom_line(position = position_dodge(width=0.2)) +
+  geom_point(size=2, shape=21, fill="white", position = position_dodge(width=0.2)) +
+  geom_text(aes(label=Mean),hjust=-0.1, vjust=-0.1) +
+  ggtitle("Average Scores by Gender and Country: Science")
+
+plotscience
+
+fun <- function(variable, data) {
+  
+  meanrp <- sapply(1:pisa_config$parameters$BRRreps, function(i) weighted.mean(as.numeric(data[[variable]]), 
+                                                                               data[[paste(pisa_config$variables$weightBRR, i, sep = "")]], 
+                                                                               na.rm = TRUE))
+  sdrp <- sapply(1:pisa_config$parameters$BRRreps, function(i) (sum(data[[paste0(pisa_config$variables$weightBRR,i)]] 
+                                                                    * (data[[variable]] - meanrp[i])^2, na.rm = TRUE)
+                                                                /sum(data[[paste0(pisa_config$variables$weightBRR,i)]], na.rm = TRUE))^(1/2))
+  meantot <- weighted.mean(as.numeric(data[[variable]]), 
+                           data[[pisa_config$variables$weightFinal]], na.rm = TRUE)
+  
+  meanse <- (0.05 * sum((meanrp - meantot)^2))^(1/2)
+  
+  LB <- meantot - 1.96*meanse
+  UB <- meantot + 1.96*meanse
+  
+  result <- data.frame(Freq = sum(!is.na(data[[variable]])), 
+                       Mean = meantot, s.e. = meanse, LB = LB, UB = UB)
+  return(round(result, 2))
+  
+}
+### apply the fun function
+
+test <- fun("INTMAT", pisa12_)
+#ok that is how it works
+
+
+##Finland
+#Girls
+pisa_fg <- subset(pisa12_, pisa12_$GENDER==0 & pisa12_$CCODE=="FIN")
+pi_fg <- fun("INTMAT", pisa_fg)
+
+#Boys
+pisa_fb <- subset(pisa12_, pisa12_$GENDER==1 & pisa12_$CCODE=="FIN")
+pi_fb <- fun("INTMAT", pisa_fb)
+
+##France
+
+#Girls
+pisa_frg <- subset(pisa12_, pisa12_$GENDER==0 & pisa12_$CCODE=="FRA")
+pi_frg <- fun("INTMAT", pisa_frg)
+
+#Boys
+pisa_frb <- subset(pisa12_, pisa12_$GENDER==1 & pisa12_$CCODE=="FRA")
+pi_frb <- fun("INTMAT", pisa_frb)
+
+##Norway
+
+#Girls
+pisa_ng <- subset(pisa12_, pisa12_$GENDER==0 & pisa12_$CCODE=="NOR")
+pi_ng <- fun("INTMAT", pisa_ng)
+
+#Boys
+pisa_nb <- subset(pisa12_, pisa12_$GENDER==1 & pisa12_$CCODE=="NOR")
+pi_nb <- fun("INTMAT", pisa_nb)
+
+##Vietnam
+
+#Girls
+pisa_vg <- subset(pisa12_, pisa12_$GENDER==0 & pisa12_$CCODE=="VNM")
+pi_vg <- fun("INTMAT", pisa_vg)
+
+#Boys
+pisa_vb <- subset(pisa12_, pisa12_$GENDER==1 & pisa12_$CCODE=="VNM")
+pi_vb <- fun("INTMAT", pisa_vb)
+
+final <- rbind(pi_fg, pi_fb, pi_frg, pi_frb, pi_ng, pi_nb, pi_vg, pi_vb)
+
+xtable(final)
+```
