@@ -1,0 +1,604 @@
+---
+title: "Inequality_EU"
+author: "Ritika Agarwal"
+date: "14/06/2022"
+output: html_document
+---
+
+```{r, echo=FALSE}
+
+#installing packages needed 
+list.of.packages <- c("tidyverse", "knitr","dbplyr","dplyr","ivpack","haven","broom","desc","lmtest","stargazer","tibble","ggplot2","psych","table1","base","gmodels","spatstat")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+df<-read_dta(file= "Data HW 4/civ_87_08.dta")
+#we have NA values only in nregion (1), agehead(10)
+#creating a new variable for household per capita consp.
+df$perc_con<- df$constot/df$hhsize
+identical(df$conspc,df$perc_con)
+
+#we see that the 2 data columns aren't the same, however inspecting line 1, we can see that actually this is only because of rounding off differences, and thus on the whole, seems to be the same. 
+
+l<-ggplot(data=df, aes(perc_con)) + geom_histogram(color="black",fill="blue")+ 
+  labs(title="Distribution of Per Capita Household Consumption",x="Per Capita Household Consumption", y="Consumption")+
+  xlim(c(0,15000))
+
+df$log_conspc<-log(df$perc_con)
+hist(df$log_conspc,main="Histogram of Log Consumption", xlab="Individuals", ylab="Log of Consumption Per Capita")
+
+med87<-median(df$log_conspc[df$year==1987])
+med98<-median(df$log_conspc[df$year==1998])
+med08<-median(df$log_conspc[df$year==2008])
+sd87<-sd(df$log_conspc[df$year==1987])
+sd98<-sd(df$log_conspc[df$year==1998])
+sd08<-sd(df$log_conspc[df$year==2008])
+
+#inspecting outliers
+
+df87<-df%>%
+  filter(year==1987)%>%
+  mutate(out= ifelse(abs(log_conspc-median(log_conspc))>3*sd(log_conspc),1,0))
+
+df87<-subset(df87,out==0) #11 outliers 
+
+df98<-df%>%
+  filter(year==1998)%>%
+  mutate(out=ifelse(abs(log_conspc-median(log_conspc))>3*sd(log_conspc),1,0))
+
+df98<-subset(df98,out==0) #39 outliers 
+
+df08<-df%>%
+  filter(year==2008)%>%
+  mutate(out=ifelse(abs(log_conspc-median(log_conspc))>3*sd(log_conspc),1,0))
+
+df08<-subset(df08,out==0) #71 outliers 
+
+dfnew<-rbind(df87,df98,df08)
+
+dfnew<-dfnew%>%
+  mutate(rep_hh= ifelse(hhsize==4 & femalehead==0 & (work_farmer==1| work_selfem==1), 1, 0))
+
+summary(dfnew$rep_hh)
+
+sum(dfnew$rep_hh)
+1180/18123 
+#we see that the representative sample is only 6.511% of the total sample size. 
+
+dfnew<-dfnew%>%
+  mutate(fd_share= exp_food/constot)
+
+df$exp_othr/df$constot #checking whether the shares are adding up to 100, we see that there are only errors of rounding off 
+
+dfnew<-dfnew%>%
+  mutate(new_weight= hhsize * weight * perc_con)
+
+dfnew1<-subset(dfnew, rep_hh==1) #this is the dataset of representative hh
+dfnew_n<-subset(dfnew1, north==1)
+
+dfnew_n<-dfnew_n%>%
+  group_by(year)%>%
+  mutate(w_avg=weighted.mean(fd_share,new_weight))
+
+unique(dfnew_n$w_avg)
+
+dfnew_s<-subset(dfnew1, north==0)
+dfnew_s<-dfnew_s%>%
+  group_by(year)%>%
+  mutate(w_avg= weighted.mean(fd_share,new_weight))
+
+unique(dfnew_s$w_avg)
+
+#create table of food share and non-food share of consumption here 
+#here you have to show how it makes sense mathematically to use the "new weights"
+#the variables budget share for food show us exactly what we have computed above! 
+#now we need to use these variables 
+
+#laspeyres: 
+
+lasp_n_87<-dfnew_n%>%
+  filter(year==1987)%>%
+  mutate(lasp_cpi= avprice_food/avprice_food*bdgshr_food + avprice_othr/avprice_othr*bdgshr_othr)
+
+l87n<-100
+
+avpr_n_98_fd<-dfnew_n$avprice_food[dfnew_n$year==1998]/dfnew_n$avprice_food[dfnew_n$year==1987]
+
+avpr_n_98_nfd<-dfnew_n$avprice_othr[dfnew_n$year==1998]/dfnew_n$avprice_othr[dfnew_n$year==1987]
+
+avpr_n_08_fd<-dfnew_n$avprice_food[dfnew_n$year==2008]/dfnew_n$avprice_food[dfnew_n$year==1987]
+
+avpr_n_08_nfd<-dfnew_n$avprice_othr[dfnew_n$year==2008]/dfnew_n$avprice_othr[dfnew_n$year==1987]
+
+lasp_n_98<- avpr_n_98_fd*dfnew_n$bdgshr_food[dfnew_n$year==1987] + avpr_n_98_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==1987]
+
+summary(lasp_n_98)
+
+l98n<-180
+
+lasp_n_08<-avpr_n_08_fd*dfnew_n$bdgshr_food[dfnew_n$year==1987] + avpr_n_08_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==1987]
+
+summary(lasp_n_08)
+
+l08n<-240.4
+
+lasp_s_87<-dfnew_s%>%
+  filter(year==1987)%>%
+  mutate(lasp_cpi= avprice_food/avprice_food*bdgshr_food + avprice_othr/avprice_othr*bdgshr_othr)
+
+l87s<-100
+
+avpr_s_98_fd<-dfnew_s$avprice_food[dfnew_s$year==1998]/dfnew_s$avprice_food[dfnew_s$year==1987]
+
+avpr_s_98_nfd<-dfnew_s$avprice_othr[dfnew_s$year==1998]/dfnew_s$avprice_othr[dfnew_s$year==1987]
+
+avpr_s_08_fd<-dfnew_s$avprice_food[dfnew_s$year==2008]/dfnew_s$avprice_food[dfnew_s$year==1987]
+
+avpr_s_08_nfd<-dfnew_s$avprice_othr[dfnew_s$year==2008]/dfnew_s$avprice_othr[dfnew_s$year==1987]
+
+lasp_s_98<- avpr_s_98_fd*dfnew_s$bdgshr_food[dfnew_s$year==1987] + avpr_s_98_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==1987]
+
+summary(lasp_s_98)
+
+l98s<-192.4
+
+lasp_s_08<-avpr_s_08_fd*dfnew_s$bdgshr_food[dfnew_s$year==1987] + avpr_s_08_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==1987]
+
+summary(lasp_s_08)
+
+l08s<-255.7
+
+#A table of Laspeyres index: 
+pasch_n_87<-dfnew_n%>%
+  filter(year==1987)%>%
+  mutate(pasch_cpi= avprice_food/avprice_food*bdgshr_food + avprice_othr/avprice_othr*bdgshr_othr)
+
+p87n<-100
+pasch_n_98<- avpr_n_98_fd*dfnew_n$bdgshr_food[dfnew_n$year==1998] + avpr_n_98_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==1998]
+
+summary(pasch_n_98)
+p98n<-180
+
+pasch_n_08<-avpr_n_08_fd*dfnew_n$bdgshr_food[dfnew_n$year==2008] + avpr_n_08_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==2008]
+
+summary(pasch_n_08)
+
+p08n<-240.6
+
+pasch_s_87<-dfnew_s%>%
+  filter(year==1987)%>%
+  mutate(pasch_cpi= avprice_food/avprice_food*bdgshr_food + avprice_othr/avprice_othr*bdgshr_othr)
+
+p87s<-100
+
+pasch_s_98<- avpr_s_98_fd*dfnew_s$bdgshr_food[dfnew_s$year==1998] + avpr_s_98_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==1998]
+
+summary(pasch_s_98)
+p98s<- 192.4
+
+pasch_s_08<-avpr_s_08_fd*dfnew_s$bdgshr_food[dfnew_s$year==2008] + avpr_s_08_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==2008]
+
+summary(pasch_s_08)
+
+p08s<-255.8
+
+#make a table of Paasche and Laspeyres for each year and each region and comment on differences (hardly any differences though?)
+
+##PPP comparisons
+#we want to compare north and south at one point rather than compare the two regions over time. Thus, for Laspeyre's calculation: we want prices from North and South in each time period, and we want quantities from the south because south is being taken as base! 
+
+avpr_ns_comp87_fd<- dfnew_n$avprice_food[dfnew_n$year==1987]/dfnew_s$avprice_food[dfnew_s$year==1987]
+
+avpr_ns_comp87_nfd<- dfnew_n$avprice_othr[dfnew_n$year==1987]/dfnew_s$avprice_othr[dfnew_s$year==1987]
+
+avpr_ns_comp98_fd<- dfnew_n$avprice_food[dfnew_n$year==1998]/dfnew_s$avprice_food[dfnew_s$year==1998]
+
+avpr_ns_comp98_nfd<- dfnew_n$avprice_othr[dfnew_n$year==1998]/dfnew_s$avprice_othr[dfnew_s$year==1998]
+
+avpr_ns_comp08_fd<- dfnew_n$avprice_food[dfnew_n$year==2008]/dfnew_s$avprice_food[dfnew_s$year==2008]
+
+avpr_ns_comp08_nfd<- dfnew_n$avprice_othr[dfnew_n$year==2008]/dfnew_s$avprice_othr[dfnew_s$year==2008]
+
+lasp_ns_comp87<-avpr_ns_comp87_fd*dfnew_s$bdgshr_food[dfnew_s$year==1987] + avpr_ns_comp87_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==1987]
+
+summary(lasp_ns_comp87)
+
+lasp_ns_comp98<-avpr_ns_comp98_fd*dfnew_s$bdgshr_food[dfnew_s$year==1998] + avpr_ns_comp98_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==1998]
+
+summary(lasp_ns_comp98)
+
+lasp_ns_comp08<-avpr_ns_comp08_fd*dfnew_s$bdgshr_food[dfnew_s$year==2008] + avpr_ns_comp08_nfd*dfnew_s$bdgshr_othr[dfnew_s$year==2008]
+
+summary(lasp_ns_comp08)
+
+#Paasches takes into consideration quantity of the current period 
+
+pasch_ns_comp87<-avpr_ns_comp87_fd*dfnew_n$bdgshr_food[dfnew_n$year==1987] + avpr_ns_comp87_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==1987]
+
+summary(pasch_ns_comp87)
+
+pasch_ns_comp98<-avpr_ns_comp98_fd*dfnew_n$bdgshr_food[dfnew_n$year==1998] + avpr_ns_comp98_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==1998]
+
+summary(pasch_ns_comp98)
+
+pasch_ns_comp08<-avpr_ns_comp08_fd*dfnew_n$bdgshr_food[dfnew_n$year==2008] + avpr_ns_comp08_nfd*dfnew_n$bdgshr_othr[dfnew_n$year==2008]
+
+summary(pasch_ns_comp08)
+
+
+#calculating Fischer Index 
+
+fisher_87<- sqrt(lasp_ns_comp87*pasch_ns_comp87)
+fisher_87
+fisher_98<- sqrt(lasp_ns_comp98*pasch_ns_comp98)
+fisher_98
+fisher_08<- sqrt(lasp_ns_comp08*pasch_ns_comp08)
+fisher_08
+dfnew_p$poor<-ifelse(dfnew_p$conspc_87<237,1,0)
+
+dfnew_p$weight2<- dfnew_p$hhsize * dfnew_p$weight
+
+summary(dfnew_p$poor) #we see that 36.35% 
+
+#national rate for 1987
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1987],dfnew_p$weight2[dfnew_p$year==1987])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1987 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1987 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==0])
+
+#national level 1998 
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1998],dfnew_p$weight2[dfnew_p$year==1998])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1998 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==1998 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==0])
+
+#national level 2008
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==2008],dfnew_p$weight2[dfnew_p$year==2008])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==2008 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor[dfnew_p$year==2008 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==0])
+
+dfnew_p$conspc_comp<-NULL
+dfnew_p$conspc_comp_temp<-NULL
+
+#changing the threshold to 2$ per day Part 3)b
+
+dfnew_p$poor1<-ifelse(dfnew_p$conspc_87<474,1,0)
+
+summary(dfnew_p$poor1) #70.4% poverty 
+
+#national rate for 1987
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1987],dfnew_p$weight2[dfnew_p$year==1987])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1987 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1987 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==0])
+
+#national level 1998 
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1998],dfnew_p$weight2[dfnew_p$year==1998])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1998 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==1998 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==0])
+
+#national level 2008
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==2008],dfnew_p$weight2[dfnew_p$year==2008])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==2008 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor1[dfnew_p$year==2008 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==0])
+
+#3)c)
+
+dfnew_p<-dfnew_p%>%
+  mutate(new_cpi= ifelse(year==1987, 100,
+                         ifelse(year==1998, 192.45, 
+                                ifelse(year==2008, 255.73,0))))
+
+table(dfnew_p$north, dfnew_p$new_cpi)
+
+dfnew_p<-dfnew_p%>%
+  mutate(newconspc_87= conspc/(new_cpi/100))%>%
+  mutate(poor2= ifelse(newconspc_87<237,1,0))
+
+#national level poverty 1987
+
+#national rate for 1987
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1987],dfnew_p$weight2[dfnew_p$year==1987])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1987 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1987 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1987 & dfnew_p$north==0])
+
+#national level 1998 
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1998],dfnew_p$weight2[dfnew_p$year==1998])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1998 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==1998 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==1998 & dfnew_p$north==0])
+
+#national level 2008
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==2008],dfnew_p$weight2[dfnew_p$year==2008])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==2008 & dfnew_p$north==1], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==1])
+
+weighted.mean(dfnew_p$poor2[dfnew_p$year==2008 & dfnew_p$north==0], dfnew_p$weight2 [dfnew_p$year==2008 & dfnew_p$north==0])
+
+##Exercise 4
+##Exercise 4.a
+
+sum87<-ewcdf(dfnew_p$conspc_87[dfnew_p$year==1987],weights=dfnew_p$weight2)
+sum98<-ewcdf(dfnew_p$conspc_87[dfnew_p$year==1998],weights=dfnew_p$weight2)
+sum08<-ewcdf(dfnew_p$conspc_87[dfnew_p$year==2008],weights=dfnew_p$weight2)
+
+perc87= quantile(sum87, probs=seq(0,1,0.01)) 
+#basically you're assigning percentiles to each quantile between 0 and 1 probability and you want percentiles at every 1% and thus you have 0 to 101 and 1-99%
+perc98= quantile(sum98, probs=seq(0,1,0.01))
+perc08= quantile(sum08, probs=seq(0,1,0.01))
+
+dflor<-data.frame(cbind(perc87,perc98,perc08))
+#we see that the 0 and 100th percentile have very extreme values and thus, including them might not be able to capture the general trend of the graph, which could lead to complications. 
+
+#thus, we choose to exclude them while graphing the results, so that we cab capture the avg trends. 
+
+##part b
+#average growth in each percentile between 1987 to 1998 and 1998 to 2008
+
+growth87_98= (perc98[2:100]/perc87[2:100])^(1/11)- 1
+growth98_08= (perc08[2:100]/perc98[2:100])^(1/10)- 1
+
+graph<-data.frame(cbind(growth87_98, growth98_08))
+ggplot(graph, aes(seq(0.01,0.99,0.01)))+
+  geom_line(aes(y=growth87_98, color="1987-1998"))+ 
+  geom_line(aes(y=growth98_08, color="1998-2008"))+
+  labs(y="Average Consumption Growth",
+       x="Individual Level Consumption Percentiles", color="Time Period")
+
+##basically can we interpret that the consumption went up for people i  1998-2008 regardless but in fact showed positive growth for many percentiles too! 
+
+rm(df_87,df_98, df_08)
+#we want to rank the individuals according to their consumption//because in Lorenz we cummulate over people and over consumption
+
+dflor<-dflor[-c(1,101),]
+
+dflor87<-dflor%>%
+  select(perc87)%>%
+  mutate(cons_share= perc87/sum(perc87))
+dflor87%>%
+  mutate(cons_share= order(cons_share))
+dflor87<-dflor87%>%
+  mutate(cumm_share = cumsum(cons_share))%>%
+  mutate(rank= 1:nrow(dflor87))
+
+dflor87gr<-data.frame(cbind(dflor87$rank,dflor87$cumm_share))
+
+dflor98<-dflor%>%
+  select(perc98)%>%
+  mutate(cons_share= perc98/sum(perc98))
+dflor98%>%
+  mutate(cons_share= order(cons_share))
+dflor98<-dflor98%>%
+  mutate(cumm_share = cumsum(cons_share))%>%
+  mutate(rank= 1:nrow(dflor98))
+
+dflor98gr<-data.frame(cbind(dflor98$rank,dflor98$cumm_share))
+
+dflor08<-dflor%>%
+  select(perc08)%>%
+  mutate(cons_share= perc08/sum(perc08))
+dflor08%>%
+  mutate(cons_share= order(cons_share))
+dflor08<-dflor08%>%
+  mutate(cumm_share = cumsum(cons_share))%>%
+  mutate(rank= 1:nrow(dflor08))
+
+dflor08gr<-data.frame(cbind(dflor08$rank,dflor08$cumm_share))
+
+dflornational<-data.frame(cbind(dflor87$rank, dflor87$cumm_share, dflor98$cumm_share, dflor08$cumm_share))
+
+ggplot(dflornational,aes(seq(0.01,0.99,0.01)))+
+  geom_line(aes(y=X2, color="1987"))+ 
+  geom_line(aes(y=X3, color="1998"))+
+  geom_line(aes(y=X4, color="2008"))+
+  labs(y="Average Consumption Growth",
+       x="Individual Level Consumption Percentiles", color="Time Period") +
+  labs(x= "Percentile", y="Cummulative Shares of Consumption", title="Lorenz Curve of Consumption per Capita in Cote D'Ivoire", colour="Year") + 
+  geom_abline(linetype="dotted")
+
+#creating percentiles for north and south for every year 
+
+dfN<-dfnew_p%>%
+  filter(north==1)
+
+sum87N<-ewcdf(dfN$conspc_87[dfN$year==1987], weights= dfN$weight2)
+sum98N<-ewcdf(dfN$conspc_87[dfN$year==1998], weights= dfN$weight2)
+sum08N<- ewcdf(dfN$conspc_87[dfN$year==2008], weights= dfN$weight2)
+
+perc87N= quantile(sum87N, probs=seq(0,1,0.01)) #basically you're assigning percentiles to each quantile between 0 and 1 probability and you want percentiles at every 1% and thus you have 0 to 101 and 1-99%
+perc98N= quantile(sum98N, probs=seq(0,1,0.01))
+perc08N= quantile(sum08N, probs=seq(0,1,0.01))
+
+dflor<-data.frame(cbind(perc87,perc98,perc08))
+
+dfN_data<- data.frame(cbind(perc87N, perc98N, perc08N))
+
+dfN_data<-dfN_data[-c(1,101),]
+
+#creating a dataset for south for the same purposes! 
+
+dfS<-dfnew_p%>%
+  filter(north==0)
+
+sum87S<-ewcdf(dfS$conspc_87[dfS$year==1987],weights=dfS$weight2)
+sum98S<-ewcdf(dfS$conspc_87[dfS$year==1998], weights= dfS$weight2)
+sum08S<- ewcdf(dfS$conspc_87[dfS$year==2008], weights= dfS$weight2)
+
+perc87S= quantile(sum87S, probs=seq(0,1,0.01)) #basically you're assigning percentiles to each quantile between 0 and 1 probability and you want percentiles at every 1% and thus you have 0 to 101 and 1-99%
+perc98S= quantile(sum98S, probs=seq(0,1,0.01))
+perc08S= quantile(sum08S, probs=seq(0,1,0.01))
+
+dfS_data<- data.frame(cbind(perc87S, perc98S, perc08S))
+
+dfS_data<-dfS_data[-c(1,101),]
+
+#now we need to do the cummulative share calculations for north and south seperately for all years, combine them and then plot them and then we're done with 5)a). After that we need to do 5)b). 
+
+#north 87 
+dfN_87<-dfN_data%>%
+  select(perc87N)%>%
+  mutate(cons_share= perc87N/sum(perc87N))
+
+dfN_87%>%
+  mutate(cons_share=order(cons_share))
+
+dfN_87<-dfN_87%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfN_87))
+
+#north 98
+
+dfN_98<-dfN_data%>%
+  select(perc98N)%>%
+  mutate(cons_share= perc98N/sum(perc98N))
+
+dfN_98%>%
+  mutate(cons_share=order(cons_share))
+
+dfN_98<-dfN_98%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfN_98))
+
+#north 2008 
+
+dfN_08<-dfN_data%>%
+  select(perc08N)%>%
+  mutate(cons_share= perc08N/sum(perc08N))
+
+dfN_08%>%
+  mutate(cons_share=order(cons_share))
+
+dfN_08<-dfN_08%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfN_08))
+
+dflornorth<-data.frame(cbind(dfN_87$rank, dfN_87$cum_share, dfN_98$cum_share, dfN_08$cum_share))
+
+ggplot(dflornorth,aes(seq(0.01,0.99,0.01)))+
+  geom_line(aes(y=X2, color="1987"))+ 
+  geom_line(aes(y=X3, color="1998"))+
+  geom_line(aes(y=X4, color="2008"))+
+  labs(y="Average Consumption Growth in North", 
+       x="Individual Level Consumption Percentiles in North", colour="Time Period")+
+  labs(x= "Percentile", y="Cummulative Shares of Consumption", title="Lorenz Curve of Consumption per Capita in Cote D'Ivoire for North", colour="Year")+
+  geom_abline(linetype="dotted")
+
+#south 87 
+dfS_87<-dfS_data%>%
+  select(perc87S)%>%
+  mutate(cons_share= perc87S/sum(perc87S))
+
+dfS_87%>%
+  mutate(cons_share=order(cons_share))
+
+dfS_87<-dfS_87%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfS_87))
+
+#north 98
+
+dfS_98<-dfS_data%>%
+  select(perc98S)%>%
+  mutate(cons_share= perc98S/sum(perc98S))
+
+dfS_98%>%
+  mutate(cons_share=order(cons_share))
+
+dfS_98<-dfS_98%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfS_98))
+
+#north 2008 
+
+dfS_08<-dfS_data%>%
+  select(perc08S)%>%
+  mutate(cons_share= perc08S/sum(perc08S))
+
+dfS_08%>%
+  mutate(cons_share=order(cons_share))
+
+dfS_08<-dfS_08%>%
+  mutate(cum_share= cumsum(cons_share))%>%
+  mutate(rank=1:nrow(dfS_08))
+
+dflorsouth<-data.frame(cbind(dfS_87$rank, dfS_87$cum_share, dfS_98$cum_share, dfS_08$cum_share))
+
+ggplot(dflorsouth,aes(seq(0.01,0.99,0.01)))+
+  geom_line(aes(y=X2, color="1987"))+ 
+  geom_line(aes(y=X3, color="1998"))+
+  geom_line(aes(y=X4, color="2008"))+
+  labs(y="Average Consumption Growth in South", 
+       x="Individual Level Consumption Percentiles in South", colour="Time Period")+
+  labs(x= "Percentile", y="Cummulative Shares of Consumption", title="Lorenz Curve of Consumption per Capita in Cote D'Ivoire for South", colour="Year")+
+  geom_abline(linetype="dotted")
+#pairwise national 
+dflornational<-dflornational%>%
+  mutate(cross87_98=ifelse(X2-X3>0, 1, 0))
+
+summary(dflornational$cross87_98)
+
+dflornational<-dflornational%>%
+  mutate(cross98_08= ifelse(X3-X4>0,1,0))
+
+dflornational<-dflornational%>%
+  mutate(cross87_08= ifelse(X2-X4>0,1,0))
+
+#pairwise north 
+
+dflornorth<-dflornorth%>%
+  mutate(cross87_98= ifelse(X2-X3>0,1,0))
+
+#we see there are both 1's and 0's, thus the curves cross at: 1st to 4th percentile for 87 and 98
+
+dflornorth<-dflornorth%>%
+  mutate(cross98_08= ifelse(X3-X4>0,1,0))
+#they don't cross 
+
+dflornorth<-dflornorth%>%
+  mutate(cross87_08= ifelse(X2-X4>0,1,0))
+summary(dflornorth$cross87_08)
+#they don't cross 
+
+#pairwise south 
+
+dflorsouth<-dflorsouth%>%
+  mutate(cross87_98= ifelse(X2-X3>0,1,0))
+
+#we see there are both 1's and 0's, thus the curves cross at: 91st to 99th percentile 
+
+dflorsouth<-dflorsouth%>%
+  mutate(cross98_08= ifelse(X3-X4>0,1,0))
+#they don't cross 
+
+dflorsouth<-dflorsouth%>%
+  mutate(cross87_08= ifelse(X2-X4>0,1,0))
+summary(dflorsouth$cross87_08)
+#they don't cross
+```
+
+
+```
+
+
