@@ -1,0 +1,277 @@
+---
+title: "Unemployment"
+author: "Ritika Agarwal"
+date: "14/06/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#installing packages needed 
+list.of.packages <- c("tidyverse", "knitr","dbplyr","dplyr","ivpack","haven","broom","desc","lmtest","stargazer","tibble","ggplot2","psych","base","gmodels","spatstat")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+
+un11<-read_dta(file= "Data HW 5/lfshwk_fr11.dta")
+un12<-read_dta(file= "Data HW 5/lfshwk_fr12.dta")
+summary(un11$temp)
+describe(un11$temp)
+
+
+un11$empl <- 
+ifelse((un11$traref==1 & !is.na(un11$traref==1))| #paid work in ref week 
+(un11$aidref==1 & un11$tafref==2 & !is.na(un11$aidref==1 & un11$tafref==2))|#did unpaid work for relative's business, not exceptional
+(un11$rabs==1 & !is.na(un11$rabs==1))|
+#was away from work because of paid leave/holiday
+(un11$rabs==3 & !is.na(un11$rabs==3))|
+#was away from work because of maternity/paternity leave
+(un11$rabs==4 & !is.na(un11$rabs==4))|
+#was away from work because of part time job
+(un11$rabs==7 & !is.na(un11$rabs==7))|
+#was away from work because of training paid for by the employer
+(un11$rabs==8 & !is.na(un11$rabs==8))|
+#was away from work because: technical unemployment (threshold not defined)
+(un11$rabs==10 & !is.na(un11$rabs==10))|
+#was away from work because of strike
+(un11$rabs==2 &un11$rabsp<=365 & !is.na(un11$rabs==2 & un11$rabsp<=365))|
+#was away from work because of sickness/injury but not longer than 365 days
+(un11$rabs==5 &un11$rabsp<=91 & !is.na(un11$rabs==5 & un11$rabsp<=91))|
+#was away from work because of parental leave but no longer than 91 days
+(un11$rabs==6 &un11$rabsp<=91 & !is.na(un11$rabs==6 & un11$rabsp<=91))|
+(un11$ag>=75 & un11$temp==1 & !is.na(un11$ag>=75 & un11$temp==1))|
+(un11$aidref==2 & un11$natstg==1 & !is.na(un11$aidref==1 & un11$natstg==1))
+#was away from work because of other unpaid leave, not longer than 91 days
+,1, 0)
+#give it a one if one of the 12 conditions is satisfied, 0 otherwise
+library(Hmisc)
+describe(un11$empl)#0 missing values #423425 observations
+summary(un11$empl) #mean= 0.4866 
+
+#we see that by changing it for including the correct internship specification, the employment rates went from 0.487 to 0.489 which could be something we want to consider. 
+
+mean(un11$empl, na.rm=T) #48.848
+emp11<-lm(empl ~ 1, weights =weight, data= un11) 
+#51.418 = 0.51418 with standard error 0.0007708
+
+#### 2012
+un12$empl <- 
+ifelse((un12$traref==1 & !is.na(un12$traref==1))| #paid work in ref week 
+(un12$aidref==1 & un12$tafref==2 & !is.na(un12$aidref==1 & un12$tafref==2))|#did unpaid work for relative's business, not exceptional
+(un12$rabs==1 & !is.na(un12$rabs==1))|
+#was away from work because of paid leave/holiday
+(un12$rabs==3 & !is.na(un12$rabs==3))|
+#was away from work because of maternity/paternity leave
+(un12$rabs==4 & !is.na(un12$rabs==4))|
+#was away from work because of part time job
+(un12$rabs==7 & !is.na(un12$rabs==7))|
+#was away from work because of training paid for by the employer
+(un12$rabs==8 & !is.na(un12$rabs==8))|
+#was away from work because: technical unemployment (threshold not defined)
+(un12$rabs==10 & !is.na(un12$rabs==10))|
+#was away from work because of strike
+(un12$rabs==2 &un12$rabsp<=365 & !is.na(un12$rabs==2 & un12$rabsp<=365))|
+#was away from work because of sickness/injury but not longer than 365 days
+(un12$rabs==5 &un12$rabsp<=91 & !is.na(un12$rabs==5 & un12$rabsp<=91))|
+#was away from work because of parental leave but no longer than 91 days
+(un12$rabs==6 &un12$rabsp<=91 & !is.na(un12$rabs==6 & un12$rabsp<=91))|
+(un12$ag>=75 & un12$temp==1 & !is.na(un12$ag>=75 & un12$temp==1))|
+(un12$aidref==2 & un12$natstg==1 & !is.na(un12$aidref==1 & un12$natstg==1))
+#was away from work because of other unpaid leave, not longer than 91 days
+,1, 0)
+#give it a one if one of the 12 conditions is satisfied, 0 otherwise
+library(Hmisc)
+describe(un12$empl)#0 missing values #422133 observations
+summary(un12$empl) #mean= 0.4871 
+
+mean(un12$empl, na.rm=T) #48.705
+emp12<-lm(empl ~ 1, weights =weight, data= un12) 
+summary(emp12) #51.20 std error: 0.0007718
+
+
+#"official" unemployment rate
+#Create an unemployment dummy for the whole population
+un11$unempl <- ifelse(un11$empl==0 & (un11$traref==2 & !is.na(un11$traref==2) & un11$dispoc==1 & !is.na(un11$dispoc==1) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastra==2 & !is.na(un11$pastra==2)) #here: person w/o job, who has not done paid work in the ref week, is actively looking for work and is free to work within 2 weeks of ref week is considered. 
+                      |(un11$traref==2 & !is.na(un11$traref==2) & un11$dispoc==1 & !is.na(un11$dispoc==1) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastra==1 & !is.na(un11$pastra==1) & (un11$rabs==9 & !is.na(un11$rabs==9)|un11$rabs==11 & !is.na(un11$rabs==11)))
+                      #here: person with job, who has not done paid work in the ref week, actively looking for work, free to work, but away from job because laid off or completed job and looking for new work 
+                      |(un11$traref==2 & !is.na(un11$traref==2) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$dispoc==2 & !is.na(un11$dispoc==2) & un11$nondic==6 & !is.na(un11$nondic==6))
+                      #here: person who hasn't done work, looking for job, not available in 2 weeks from ref week because they are sick
+                      |(un11$tafref==2 & !is.na(un11$traref==2) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastrb==1 & !is.na(un11$pastrb==1) & un11$ultj<=91 & !is.na(un11$ultj<=91)),1,0)
+#here: not worked, looking for job, found job that starts later, and the job starts in less than 91 days 
+
+describe(un11$unempl)
+summary(un11$unempl)
+unemp11<-lm(unempl[empl==1 | unempl==1]~1, weights= weight[empl==1 | unempl==1], data=un11)
+summary(unemp11) #the unemployment rate is 0.0863
+
+#The same procedure: 2012
+
+un12$unempl <- ifelse(un12$empl==0 & (un12$traref==2 & !is.na(un12$traref==2) & (un12$dem==1|un12$contch==1) & !is.na(un12$dispoc==1) & !is.na(un12$contch==1) & !is.na(un12$dem==1) & un12$pastra==2 & !is.na(un12$pastra==2)) #here: person w/o job, who has not done paid work in the ref week, is actively looking for work and is free to work within 2 weeks of ref week is considered. 
+                      |(un12$traref==2 & !is.na(un12$traref==2) & un12$dispoc==1 & !is.na(un12$dispoc==1) & (un12$dem==1|un12$contch==1) & !is.na(un12$dem==1) & !is.na(un12$contch==1) & un12$pastra==1 & !is.na(un12$pastra==1) & (un12$rabs==9 & !is.na(un12$rabs==9)|un12$rabs==11 & !is.na(un12$rabs==11)))
+                      #here: person with job, who has not done paid work in the ref week, actively looking for work, free to work, but away from job because laid off or completed job and looking for new work 
+                      |(un12$traref==2 & !is.na(un12$traref==2) & (un12$dem==1|un12$contch==1) & !is.na(un12$dem==1) & !is.na(un12$contch==1)& un12$dispoc==2 & !is.na(un12$dispoc==2) & un12$nondic==6 & !is.na(un12$nondic==6))
+                      #here: person who hasn't done work, looking for job, not available in 2 weeks from ref week because they are sick
+                      |(un12$tafref==2 & !is.na(un12$traref==2) & (un12$dem==1|un12$contch==1) & !is.na(un12$dem==1) & !is.na(un12$contch==1) & un12$pastrb==1 & !is.na(un12$pastrb==1) & un12$ultj<=91 & !is.na(un12$ultj<=91)),1,0)
+
+describe(un12$unempl)
+summary(un12$unempl)
+
+unemp12<-lm(unempl[empl==1 | unempl==1]~1, weights= weight[empl==1 | unempl==1], data=un12)
+summary(unemp12) #0.1000
+
+#own rate:
+
+un11$unempl1 <- ifelse(un11$empl==0 & (un11$traref==2 & !is.na(un11$traref==2) & un11$dispoc==1 & !is.na(un11$dispoc==1) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastra==2 & !is.na(un11$pastra==2)) #here: person w/o job, who has not done paid work in the ref week, is actively looking for work and is free to work within 2 weeks of ref week is considered. 
+                      |( un11$traref==2 & !is.na(un11$traref==2) & un11$sousempl==3 & !is.na(un11$sousempl==3) & un11$dispoc==1 & !is.na(un11$dispoc==1) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastra==1 & !is.na(un11$pastra==1) &  (un11$rabs==9 & !is.na(un11$rabs==9)|un11$rabs==11 & !is.na(un11$rabs==11)))
+                      #here: person with job, who has not done paid work in the ref week, actively looking for work, free to work, but away from job because laid off or completed job and looking for new work 
+                      |(un11$traref==2 & !is.na(un11$traref==2) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$dispoc==2 & !is.na(un11$dispoc==2) & !is.na(un11$nondic==6))
+                      #here: person who hasn't done work, looking for job, not available in 2 weeks from ref week because they are sick
+                      |(un11$tafref==2 & !is.na(un11$traref==2) & (un11$dem==1|un11$contch==1) & !is.na(un11$dem==1) & !is.na(un11$contch==1) & un11$pastrb==1 & !is.na(un11$pastrb==1)),1,0)
+
+unemp_new<-lm(unempl1~1, weights= weight, data=un11)
+summary(unemp_new)
+
+
+#crosstab
+#(e) evolution of the structure of the working-age population in
+#terms of work status
+### create a dummy indicating inactiveness
+
+## 2011
+
+un11$inact <- ifelse(un11$empl==0 & un11$unempl==0, 1, 0)
+summary(un11$inact)
+
+mean(un11$inact) + mean(un11$empl) + mean(un11$unempl) #we have thus accounted for all the people// and they fall in the right categories!
+
+## 2012
+
+un12$inact <- ifelse(un12$empl==0 & un12$unempl==0, 1, 0)
+summary(un12$inact)
+mean(un12$inact) + mean(un12$empl) + mean(un12$unempl)
+
+summary(un11$trim) #no NA, we can use this variable to understand which quarter the interview was taken in 
+summary(un12$trim) #again, no NA, we can use this variable to understand which quarter interview was in
+
+un11_cross<-un11%>%
+  mutate(noi_c= as.character(noi))%>%
+  mutate(ID= paste(ident, noi_c))%>%
+  select(ID, trim, unempl, empl, inact)%>%
+  group_by(ID)%>%
+  filter(trim==1|trim==2|trim==3)%>%
+  filter(length(trim)>=3)%>%
+  mutate(lbrstat= ifelse(unempl==1, 1, ifelse(empl==1,2,0)))
+
+describe(un11_cross)
+
+un11_q1<-un11_cross%>%
+  filter(trim==1)%>%
+  select(lbrstatq1= lbrstat,ID)
+
+un11_q2<-un11_cross%>%
+  filter(trim==2)%>%
+  select(lbrstatq2= lbrstat, ID)
+
+un11_q3<-un11_cross%>%
+  filter(trim==3)%>%
+  select(lbrstatq3= lbrstat, ID)
+
+CrossTable(un11_q1$lbrstatq1, un11_q2$lbrstatq2,dnn=c("Quarter 1,2011", "Quarter 2,2011"), addmargins=FALSE,prop.chisq=FALSE)
+
+CrossTable(un11_q2$lbrstatq2, un11_q3$lbrstatq3,dnn=c("Quarter 2,2011", "Quarter 3,2011"), addmargins=FALSE,prop.chisq=FALSE)
+
+un12_cross<-un12%>%
+  mutate(noi_c= as.character(noi))%>%
+  mutate(ID= paste(ident, noi_c))%>%
+  select(ID, trim, unempl, empl, inact)%>%
+  group_by(ID)%>%
+  filter(trim==1|trim==2|trim==3)%>%
+  filter(length(trim)>=3)%>%
+  mutate(lbrstat= ifelse(unempl==1, 1, ifelse(empl==1,2,0)))
+
+
+un12_q1<-un12_cross%>%
+  filter(trim==1)%>%
+  select(lbrstatq1= lbrstat,ID)
+
+un12_q2<-un12_cross%>%
+  filter(trim==2)%>%
+  select(lbrstatq2= lbrstat, ID)
+
+CrossTable(un12_q1$lbrstatq1, un12_q2$lbrstatq2, dnn=c("Quarter 1,2012", "Quarter 2,2012"), addmargins=FALSE, prop.chisq=FALSE)
+
+#f
+
+#### (f) 2012: difference in labor force  and unemployment given sex, age and education
+#### Unemployment
+
+### Gender
+
+unempl_m<-lm(unempl[sexe==1 & (empl==1|unempl==1)]~1, weights= weight[sexe==1 & (empl==1|unempl==1)], data= un12)
+
+summary(unempl_m) #0.097 with se= 0.0008 
+
+unempl_f<-lm(unempl[sexe==2 & (empl==1|unempl==1)]~1, weights= weight[sexe==2 & (empl==1|unempl==1)], data= un12)
+
+summary(unempl_f)#0.1033
+#se:  0.000916
+
+### Age
+
+unempl_o <- lm(un12$unempl[un12$ag<80 & un12$ag>54 & (un12$empl==1|un12$unempl==1)] ~1, weight=un12$weight[un12$ag<80 & un12$ag>54 & (un12$empl==1|un12$unempl==1)])
+summary(unempl_o)#0.07 se= 0.0013
+
+unempl_y <- lm(un12$unempl[un12$ag<30 & (un12$empl==1|un12$unempl==1)]~1, weight=un12$weight[un12$ag<30 & (un12$empl==1|un12$unempl==1)])
+summary(unempl_y)#0.1826 se= 0.0018
+
+unempl_mid <- lm(un12$unempl[un12$ag<54 & un12$ag>30 & (un12$empl==1|un12$unempl==1)]~1, weight=un12$weight[un12$ag<54 & un12$ag>30 & (un12$empl==1|un12$unempl==1)])
+summary(unempl_mid)#0.0805 se: 0.0007
+
+### Education
+
+unempl_h <- lm(un12$unempl[ (un12$empl==1|un12$unempl==1) & un12$ddipl==1]~1, weight=un12$weight[(un12$empl==1|un12$unempl==1) & un12$ddipl==1])
+summary(unempl_h)#0.0536
+#se:  0.001113
+
+unempl_l <- lm(un12$unempl[un12$ag<65 & (un12$empl==1|un12$unempl==1) & un12$ddipl==7]~1, weight=un12$weight[un12$ag<65 & (un12$empl==1|un12$unempl==1) & un12$ddipl==7])
+summary(unempl_l)#0.1812 and se= 0.002
+
+#Labour Force
+
+##generate dummy indicating activeness:
+
+un12$act <- ifelse(un12$inact==0, 1, 0)
+### Gender
+
+part_m <- lm(un12$act[un12$sexe==1]~1, weight=un12$weight[un12$sexe==1])
+summary(part_m)# 0.6202
+#se: 0.00109
+
+part_f <- lm(un12$act[un12$sexe==2]~1, weight=un12$weight[un12$sexe==2])
+summary(part_f)# 0.5219
+#se: 0.001063
+
+### Age
+
+part_o<- lm(un12$act[un12$ag<80 & un12$ag>54]~1, weight=un12$weight[un12$ag<80 & un12$ag>54])
+summary(part_o)#  0.2834
+
+part_y <- lm(un12$act[un12$ag<30]~1, weight=un12$weight[un12$ag<30])
+summary(part_y)#  0.5306
+
+part_mid <- lm(un12$act[un12$ag<54 & un12$ag>30]~1, weight=un12$weight[un12$ag<54 & un12$ag>30])
+summary(part_mid) #0.893
+
+
+plotmat(table1, box.cex=1, cex=1,cex.txt=0.8, self.cex=1, shadow.col=c(1,2,3),
+relsize=0.70 , latex = TRUE, name = c("E", "I", "U"))
+
+### Education
+
+part_h <- lm(un12$act[un12$ddipl==1]~1, weight=un12$weight[ un12$ddipl==1])
+summary(part_h)#  0.783
+
+part_l <- lm(un12$act[un12$ddipl==7]~1, weight=un12$weight[un12$ddipl==7])
+summary(part_l)#  0.333
+```
+
