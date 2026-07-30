@@ -1,5 +1,5 @@
 # coding-samples-
-These are coding samples in R. They display the use of multiple large datasets to conduct data cleaning, data analysis and data presentation. 
+These are coding samples in R, Stata, Python, and examples of surveys I've contributed to in Qualtrics and SurveyCTO. 
 The short descriptions for each code sample are given below:
 
 **Education_PISA**: The code has 2 parts. One uses the data from the French primary schools survey, and analyses progress of pupils between 1st and 3rd standard. Then it produces transition matrices between tests 1 and 2 and tests 2 and 3. The code then compares children born in Jan to children born in Dec and the evolution of their progress in France, further looking at differences arising between children of executives and blue collar workers as well. The next part of the code analyses data from PISA for France, Norway and Vietnam. It looks at the number of missing values, runs the PISA function to determine the country-level average scores in math, reading and science. The code then looks at differences amongst girls and boys and whether these differences are similar between countries. The code produces very informative and clear graphs to compare girls and boys, across countries with confidence intervals to see if the differences are statistically significant.
@@ -15,8 +15,6 @@ The short descriptions for each code sample are given below:
 **Python script: GPE's grant monitoring tool** — it consolidates data from multiple source files into a structured Excel report. 
 It builds the Implementation Grants, filtering grants that are currently active (started but not yet closed), and then calculates several monitoring metrics: cumulative utilization percentage, utilization in the last 12 months, a "utilization lag" (how far behind disbursement is relative to where it should be in the grant lifecycle), and a utilization status flag (On track / Slightly delayed / Delayed). It also flags grants with slow Year 1 starts, merges in implementation ratings from the mega table and monitoring update dates from the RM dashboard, and produces a summary flag column consolidating all issues. It also tracks other things like pending grants which is useful for flagging approvals that haven't become effective.
 
-**Stata script: for a behavioural economics experiment studying the effect of a gut microbiota intervention**: The script has four main sections: 
-1. Risk Attitude Task: Analyses how willing participants are to choose a risky vs. certain payoff across two sessions. Computes individual risk-aversion parameters (alpha), compares Verum and Placebo groups using t-tests and IQR plots, and correlates risk attitudes with intertemporal choice behaviour (the k-parameter from a discounting task).
-2. Transitivity Task: Measures the consistency of preferences — whether participants rank items (mugs and postcards) in a logically coherent order across sessions. Counts "inconsistency errors" per participant and tests whether the intervention affects preference coherence.
-3. Cognitive Reflection Task (CRT): Scores participants on a set of questions designed to distinguish intuitive from analytical thinking. Tracks mistakes across sessions and correlates CRT performance with the discounting and risk parameters.
-4. Hedonic Satiation Task: Tests whether enjoyment of food images (pizza and steak) declines across 20 repeated exposures — a measure of hedonic adaptation. Compares satiation rates between Verum and Placebo groups across both sessions.
+**Qualtrics QSF file: Survey Design** - for online behavioral experiment on food choice to analyze parameters of taste and health. 
+
+
